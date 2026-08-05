@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
-type View = "dashboard"|"reconcile"|"income"|"expenses"|"reports"|"settings";\ntype Account = "shopee"|"tiktok";
+type View = "dashboard"|"reconcile"|"income"|"expenses"|"reports"|"settings";
+type Account = "shopee"|"tiktok";
 type Kind = "income"|"processing"|"promotion"|"adjustment"|"failed"|"returns"|"orders"|"returnTracking"|"storage"|"expenses"|"tkSettled"|"tkProcessing"|"tkOrders"|"tkCancels"|"tkReturns"|"tkReturnTracking";
 type Row = Record<string, unknown>;
 type ImportSet = { name:string; kind:Kind; rows:Row[]; importedAt:string };
@@ -11,7 +12,9 @@ type ImportSet = { name:string; kind:Kind; rows:Row[]; importedAt:string };
 const kinds: Record<Kind,string> = {
   income:"尾款收入 Released", processing:"蝦皮訂單處理費", promotion:"推廣費 Seller Balance Payment",
   adjustment:"帳單調整 Adjustment", failed:"交付失敗訂單", returns:"退貨 Return/Refund",
-  orders:"蝦皮店鋪訂單", returnTracking:"退貨訂單狀態表", storage:"倉儲費表", expenses:"公司支出／刷單表",\n  tkSettled:"TikTok Finance Settled", tkProcessing:"TikTok 訂單處理費", tkOrders:"TikTok Manage Orders",\n  tkCancels:"TikTok 取消單", tkReturns:"TikTok 退貨單", tkReturnTracking:"TikTok Manage Returns 物流表"
+  orders:"蝦皮店鋪訂單", returnTracking:"退貨訂單狀態表", storage:"倉儲費表", expenses:"公司支出／刷單表",
+  tkSettled:"TikTok Finance Settled", tkProcessing:"TikTok 訂單處理費", tkOrders:"TikTok Manage Orders",
+  tkCancels:"TikTok 取消單", tkReturns:"TikTok 退貨單", tkReturnTracking:"TikTok Manage Returns 物流表"
 };
 const nav: [View,string,string][] = [["dashboard","▦","匯總"],["reconcile","⇄","訂單對帳"],["income","▤","收入明細"],["expenses","⊖","費用管理"],["reports","◫","報表中心"]];
 const titles: Record<View,[string,string]> = {
@@ -43,7 +46,8 @@ const money=(v:number)=>"Rp "+new Intl.NumberFormat("id-ID",{maximumFractionDigi
 const classify=(id:unknown)=>/^\d+$/.test(String(id??"").trim())?"TikTok":"Shopee";
 
 export default function Home(){
-  const [view,setView]=useState<View>("dashboard");\n  const [account,setAccount]=useState<Account>("shopee");
+  const [view,setView]=useState<View>("dashboard");
+  const [account,setAccount]=useState<Account>("shopee");
   const [kind,setKind]=useState<Kind>("income");
   const [sets,setSets]=useState<ImportSet[]>([]);
   const [month,setMonth]=useState("2026-08");
@@ -97,7 +101,8 @@ export default function Home(){
     const csv=XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(data));const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
     const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`Shopee-account-${month}.csv`;a.click();URL.revokeObjectURL(url);
   }
-  const go=(v:View)=>{setView(v);window.scrollTo({top:0,behavior:"smooth"});};\n  const switchAccount=(a:Account)=>{setAccount(a);setKind(a==="shopee"?"income":"tkSettled");};
+  const go=(v:View)=>{setView(v);window.scrollTo({top:0,behavior:"smooth"});};
+  const switchAccount=(a:Account)=>{setAccount(a);setKind(a==="shopee"?"income":"tkSettled");};
 
   return <main className="app-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">M</span><div><b>All Money</b><small>Back My Home</small></div></div>
