@@ -30,3 +30,15 @@ header { display:flex; justify-content:space-between; align-items:flex-end; gap:
 @media(max-width:720px){.rule-banner,.import-toolbar{align-items:flex-start;flex-direction:column}.rule-banner em{margin-left:0}.import-toolbar select,.import-toolbar button{width:100%}.form-grid,.formula-list{grid-template-columns:1fr}}
 
 .account-tabs{display:flex;gap:4px;background:#e9edf4;border-radius:9px;padding:3px;margin-top:16px;width:max-content}.account-tabs button{border:0;background:transparent;color:#778096;border-radius:7px;padding:7px 13px;font-size:11px;cursor:pointer}.account-tabs button.selected{background:#fff;color:#2759dd;font-weight:800;box-shadow:0 2px 7px #20345a18}
+
+/* Readability pass for Traditional Chinese accounting screens */
+body{font-family:"Microsoft JhengHei","Noto Sans TC","PingFang TC","Heiti TC",Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-size:15px}
+.workspace h1{font-size:30px;font-weight:800}.subtitle{font-size:15px;line-height:1.65}.eyebrow{font-size:13px}
+.card{padding:26px}.card-title h2{font-size:19px;font-weight:800;letter-spacing:.01em}.card-title p{font-size:13px;line-height:1.55;margin-top:7px}
+.check-list>div{gap:14px;padding:15px 2px}.check-list b{font-size:14px;line-height:1.45;color:#17213a}.check-list small{font-size:12px;line-height:1.5;margin-top:4px;color:#7b8498}.check-list .ok,.check-list .missing{width:30px;height:30px;font-size:13px;flex:0 0 30px}
+.nav-item{font-size:15px;padding:13px 14px}.metric-top span{font-size:14px}.metric strong{font-size:23px}.metric p,.metric p span{font-size:12px}
+.rule-banner b,.rule-banner span{font-size:14px}.rule-banner em{font-size:12px}.account-tabs button{font-size:13px;padding:9px 15px}
+.setting-list b{font-size:14px}.setting-list small{font-size:12px}.formula-list p{font-size:13px;line-height:1.6}
+th{font-size:12px;padding:12px 11px}td,td b{font-size:13px}td small{font-size:11px}
+.header-actions button,.header-actions select,.header-actions input.period,.card-title button{font-size:14px}
+@media(max-width:720px){.workspace h1{font-size:25px}.subtitle{font-size:14px}.card{padding:19px}.check-list b{font-size:13px}.check-list small{font-size:11px}}
