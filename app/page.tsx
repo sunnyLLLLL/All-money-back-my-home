@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 type View = "dashboard"|"reconcile"|"income"|"expenses"|"reports"|"settings";
@@ -8,6 +8,9 @@ type Account = "shopee"|"tiktok";
 type Kind = "income"|"processing"|"promotion"|"adjustment"|"failed"|"returns"|"orders"|"returnTracking"|"storage"|"expenses"|"tkSettled"|"tkProcessing"|"tkOrders"|"tkCancels"|"tkReturns"|"tkReturnTracking";
 type Row = Record<string, unknown>;
 type ImportSet = { name:string; kind:Kind; rows:Row[]; importedAt:string };
+
+const API_URL = "https://all-money-back-api.sunny956925370.workers.dev";
+type CloudState = { sets?:ImportSet[]; month?:string; cutoff?:number; rate?:number; manual?:{handling:number;wages:number;other:number;brushOrders:number}; account?:Account };
 
 const kinds: Record<Kind,string> = {
   income:"尾款收入 Released", processing:"蝦皮訂單處理費", promotion:"推廣費 Seller Balance Payment",
@@ -56,8 +59,78 @@ export default function Home(){
   const [manual,setManual]=useState({handling:0,wages:0,other:0,brushOrders:0});
   const [showImport,setShowImport]=useState(false);
   const [notice,setNotice]=useState("");
+  const [authChecked,setAuthChecked]=useState(false);
+  const [authenticated,setAuthenticated]=useState(false);
+  const [token,setToken]=useState("");
+  const [password,setPassword]=useState("");
+  const [authError,setAuthError]=useState("");
+  const [loginPending,setLoginPending]=useState(false);
+  const [syncStatus,setSyncStatus]=useState<"idle"|"loading"|"saving"|"saved"|"error">("idle");
+  const cloudReady=useRef(false);
   const input=useRef<HTMLInputElement>(null);
   const rows=(k:Kind)=>sets.filter(s=>s.kind===k).flatMap(s=>s.rows);
+
+  async function loadCloudState(activeToken:string){
+    setSyncStatus("loading");
+    try{
+      const response=await fetch(`${API_URL}/api/state`,{headers:{Authorization:`Bearer ${activeToken}`}});
+      if(response.status===401)throw new Error("unauthorized");
+      const result=await response.json();
+      const state=(result.state||{}) as CloudState;
+      if(state.sets)setSets(state.sets);
+      if(state.month)setMonth(state.month);
+      if(typeof state.cutoff==="number")setCutoff(state.cutoff);
+      if(typeof state.rate==="number")setRate(state.rate);
+      if(state.manual)setManual(state.manual);
+      if(state.account)setAccount(state.account);
+      cloudReady.current=true;
+      setSyncStatus("saved");
+    }catch{
+      sessionStorage.removeItem("all_money_token");
+      setAuthenticated(false);setToken("");setSyncStatus("error");
+    }
+  }
+
+  async function login(event:React.FormEvent){
+    event.preventDefault();setLoginPending(true);setAuthError("");
+    try{
+      const response=await fetch(`${API_URL}/api/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.message||"登入失敗");
+      sessionStorage.setItem("all_money_token",result.token);
+      setToken(result.token);setAuthenticated(true);setPassword("");
+      await loadCloudState(result.token);
+    }catch(error){setAuthError(error instanceof Error?error.message:"登入失敗");}
+    finally{setLoginPending(false);setAuthChecked(true);}
+  }
+
+  async function logout(){
+    try{await fetch(`${API_URL}/api/logout`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});}catch{}
+    sessionStorage.removeItem("all_money_token");cloudReady.current=false;
+    setToken("");setAuthenticated(false);setSyncStatus("idle");
+  }
+
+  useEffect(()=>{
+    const saved=sessionStorage.getItem("all_money_token");
+    if(!saved){setAuthChecked(true);return;}
+    fetch(`${API_URL}/api/session`,{headers:{Authorization:`Bearer ${saved}`}})
+      .then(async response=>{if(!response.ok)throw new Error();setToken(saved);setAuthenticated(true);await loadCloudState(saved);})
+      .catch(()=>sessionStorage.removeItem("all_money_token"))
+      .finally(()=>setAuthChecked(true));
+  },[]);
+
+  useEffect(()=>{
+    if(!authenticated||!token||!cloudReady.current)return;
+    setSyncStatus("saving");
+    const timer=window.setTimeout(async()=>{
+      try{
+        const response=await fetch(`${API_URL}/api/state`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({sets,month,cutoff,rate,manual,account})});
+        if(!response.ok)throw new Error();
+        setSyncStatus("saved");
+      }catch{setSyncStatus("error");}
+    },900);
+    return()=>window.clearTimeout(timer);
+  },[sets,month,cutoff,rate,manual,account,authenticated,token]);
 
   const calc=useMemo(()=>{
     const income=rows("income"), processing=rows("processing"), failed=rows("failed"), returns=rows("returns");
@@ -104,12 +177,15 @@ export default function Home(){
   const go=(v:View)=>{setView(v);window.scrollTo({top:0,behavior:"smooth"});};
   const switchAccount=(a:Account)=>{setAccount(a);setKind(a==="shopee"?"income":"tkSettled");};
 
+  if(!authChecked)return <main className="login-shell"><section className="login-card"><div className="login-logo">M</div><h1>帳務中心</h1><p>正在檢查登入狀態…</p></section></main>;
+  if(!authenticated)return <main className="login-shell"><form className="login-card" onSubmit={login}><div className="login-logo">M</div><span className="login-eyebrow">ALL MONEY BACK MY HOME</span><h1>登入帳務中心</h1><p>輸入你在 Cloudflare 設定的網站專用密碼。</p><label className="login-field"><span>登入密碼</span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" autoFocus placeholder="請輸入密碼"/></label>{authError&&<div className="login-error">{authError}</div>}<button className="login-submit" disabled={loginPending||!password}>{loginPending?"登入中…":"安全登入"}</button><small>帳務資料會加密驗證後同步到 Cloudflare D1</small></form></main>;
+
   return <main className="app-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">M</span><div><b>All Money</b><small>Back My Home</small></div></div>
       <nav>{nav.map(([v,i,t])=><button key={v} className={`nav-item ${view===v?"active":""}`} onClick={()=>go(v)}><span>{i}</span>{t}</button>)}</nav>
-      <div className="sidebar-bottom"><button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>go("settings")}><span>⚙</span>計算規則</button><div className="profile"><div className="avatar">龍</div><div><b>本機帳務</b><small>資料不離開瀏覽器</small></div></div></div>
+      <div className="sidebar-bottom"><button className={`nav-item ${view==="settings"?"active":""}`} onClick={()=>go("settings")}><span>⚙</span>計算規則</button><div className="profile"><div className="avatar">龍</div><div><b>雲端帳務</b><small>{syncStatus==="saved"?"D1 已同步":"正在連線"}</small></div></div></div>
     </aside>
-    <section className="workspace"><header><div><p className="eyebrow">{account==="shopee"?"SHOPEE ACCOUNTING":"TIKTOK ACCOUNTING"}</p><h1>{account==="shopee"?titles[view][0]:`TikTok ${titles[view][0]}`}</h1><p className="subtitle">{account==="shopee"?titles[view][1]:"依照《抖音做帳》規則，處理 Settled、訂單、取消與退貨資料。"}</p><div className="account-tabs"><button className={account==="shopee"?"selected":""} onClick={()=>switchAccount("shopee")}>Shopee 蝦皮</button><button className={account==="tiktok"?"selected":""} onClick={()=>switchAccount("tiktok")}>TikTok 抖音</button></div></div><div className="header-actions"><input className="period" type="month" value={month} onChange={e=>setMonth(e.target.value)}/><button className="primary" onClick={()=>setShowImport(true)}>＋ 匯入報表</button></div></header>
+    <section className="workspace"><header><div><p className="eyebrow">{account==="shopee"?"SHOPEE ACCOUNTING":"TIKTOK ACCOUNTING"}</p><h1>{account==="shopee"?titles[view][0]:`TikTok ${titles[view][0]}`}</h1><p className="subtitle">{account==="shopee"?titles[view][1]:"依照《抖音做帳》規則，處理 Settled、訂單、取消與退貨資料。"}</p><div className="account-tabs"><button className={account==="shopee"?"selected":""} onClick={()=>switchAccount("shopee")}>Shopee 蝦皮</button><button className={account==="tiktok"?"selected":""} onClick={()=>switchAccount("tiktok")}>TikTok 抖音</button></div></div><div className="header-actions"><span className={`sync-badge ${syncStatus}`}>{syncStatus==="saving"?"同步中":syncStatus==="saved"?"已同步":syncStatus==="error"?"同步失敗":"雲端"}</span><input className="period" type="month" value={month} onChange={e=>setMonth(e.target.value)}/><button className="primary" onClick={()=>setShowImport(true)}>＋ 匯入報表</button><button onClick={logout}>登出</button></div></header>
 
       {view==="dashboard"&&<section className="page-stack"><div className="rule-banner"><b>{account==="shopee"?"蝦皮結算區間":"TikTok Settled 結算區間"}</b><span>上月 {cutoff+1} 日至本月 {cutoff} 日</span><em>{sets.filter(s=>account==="shopee"?!s.kind.startsWith("tk"):s.kind.startsWith("tk")).length} 份相關報表</em></div><section className="kpi-grid">{[["當月銷售收入",calc.currentSales,"blue"],["退貨成本",calc.returnCost,"violet"],["總成本費用",calc.totalCost,"amber"],["淨利潤",calc.profit,"green"]].map(([a,b,t])=><article className="metric" key={String(a)}><div className={`metric-icon ${t}`}>◎</div><div className="metric-top"><span>{a}</span></div><strong>{money(Number(b))}</strong><p><span>{sets.length?"已依規則計算":"等待匯入報表"}</span></p></article>)}</section><section className="dashboard-grid"><Summary calc={calc}/><article className="card"><div className="card-title"><div><h2>資料完整度</h2><p>必要報表檢查</p></div></div><div className="check-list">{(account==="shopee"?(["income","processing","promotion","adjustment","failed","returns","orders"] as Kind[]):(["tkSettled","tkProcessing","tkOrders","tkCancels","tkReturns","tkReturnTracking"] as Kind[])).map(k=><div key={k}><span className={rows(k).length?"ok":"missing"}>{rows(k).length?"✓":"!"}</span><p><b>{kinds[k]}</b><small>{rows(k).length?rows(k).length+" 筆":"尚未匯入"}</small></p></div>)}</div></article></section></section>}
 
@@ -124,7 +200,7 @@ export default function Home(){
       {view==="settings"&&<section className="page-stack"><article className="card"><div className="card-title"><div><h2>結算與換算</h2><p>預設採用記事本規則</p></div></div><div className="form-grid"><Field label="每月結算日" value={cutoff} set={v=>setCutoff(Math.max(1,Math.min(28,v)))}/><Field label="人民幣兌印尼盾" value={rate} set={setRate}/></div></article><article className="card"><div className="card-title"><div><h2>已啟用公式</h2></div></div><div className="formula-list"><p>當月銷售收入＝銷售收入－推廣費用</p><p>回款手續費＝當月銷售收入×0.004</p><p>退貨成本＝交付失敗貨值＋退貨貨值</p><p>上架費用＝尾款收入數量×0.1×匯率</p><p>刷單費用＝刷單數量×10×匯率</p><p>全數字訂單識別為 TikTok；含英文字母識別為 Shopee</p><p>TikTok 店鋪訂單按建立月份匯入，不套用＋20日區間</p><p>TikTok 取消單保留 Cancel；退貨單保留 Return/Refund</p><p>TikTok 退貨缺少 Tracking ID 時，以 Manage Returns 手動補齊</p></div></article></section>}
     </section>
 
-    {showImport&&<div className="modal-backdrop" onMouseDown={()=>setShowImport(false)}><section className="modal" onMouseDown={e=>e.stopPropagation()}><button className="close" onClick={()=>setShowImport(false)}>×</button><div className="modal-icon">⇧</div><h2>匯入{kinds[kind]}</h2><p>支援 .xlsx、.xls、.csv；第一個工作表會在瀏覽器內解析。</p><button className="dropzone" onClick={()=>input.current?.click()}><b>選擇檔案</b><span>目前類型：{kinds[kind]}</span></button><input ref={input} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>importFile(e.target.files?.[0])}/><small>不會上傳到伺服器或公開儲存。</small></section></div>}
+    {showImport&&<div className="modal-backdrop" onMouseDown={()=>setShowImport(false)}><section className="modal" onMouseDown={e=>e.stopPropagation()}><button className="close" onClick={()=>setShowImport(false)}>×</button><div className="modal-icon">⇧</div><h2>匯入{kinds[kind]}</h2><p>支援 .xlsx、.xls、.csv；第一個工作表會在瀏覽器內解析。</p><button className="dropzone" onClick={()=>input.current?.click()}><b>選擇檔案</b><span>目前類型：{kinds[kind]}</span></button><input ref={input} hidden type="file" accept=".xlsx,.xls,.csv" onChange={e=>importFile(e.target.files?.[0])}/><small>檔案會在瀏覽器解析，登入後安全同步至私人 D1 資料庫。</small></section></div>}
     {notice&&<div className="toast">✓ {notice}</div>}
   </main>;
 }
